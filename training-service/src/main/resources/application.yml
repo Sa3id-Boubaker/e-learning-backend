@@ -1,0 +1,48 @@
+spring:
+  application:
+    name: training-service
+  mongodb:
+    uri: mongodb+srv://${MONGO_DB_USER}:${MONGO_DB_PASSWORD}@cluster0.fjb1pp5.mongodb.net/training-db?retryWrites=true&w=majority
+  servlet:
+    multipart:
+      max-file-size: 4200MB
+      max-request-size: 4200MB
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+
+server:
+  port: 8084
+
+app:
+  timezone: Africa/Tunis
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+
+jwt:
+  secret: ${JWT_SECRET}
+
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME}
+  api-key: "${CLOUDINARY_API_KEY}"
+  api-secret: ${CLOUDINARY_API_SECRET}
+
+training:
+  recording:
+    max-file-size-bytes: 4294967296  # 4 GB
+    folder: omarise/training-recordings
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

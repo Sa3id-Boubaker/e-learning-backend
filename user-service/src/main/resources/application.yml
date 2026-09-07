@@ -1,0 +1,58 @@
+spring:
+  application:
+    name: user-service
+  mongodb:
+    uri: "mongodb+srv://${MONGO_DB_USER}:${MONGO_DB_PASSWORD}@cluster0.fjb1pp5.mongodb.net/e-learning-bd?retryWrites=true&w=majority"
+  mail:
+    host: "${MAIL_HOST:smtp.gmail.com}"
+    port: "${MAIL_PORT:587}"
+    username: "${MAIL_USERNAME}"
+    password: "${MAIL_PASSWORD}"
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+server:
+  port: 8081
+
+verification:
+  code:
+    expiration-minutes: 10
+
+jwt:
+  secret: "${JWT_SECRET}"
+  expiration: 86400000
+
+password-reset:
+  code:
+    expiration-minutes: 10
+  token:
+    expiration-minutes: 15
+
+cloudinary:
+  cloud-name: "${CLOUDINARY_CLOUD_NAME}"
+  api-key: "${CLOUDINARY_API_KEY}"
+  api-secret: "${CLOUDINARY_API_SECRET}"
+
+eureka:
+  client:
+    service-url:
+      defaultZone: "http://localhost:8761/eureka/"
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+
+google:
+  oauth:
+    client-id: "${GOOGLE_OAUTH_CLIENT_ID:508532760559-kfd67q4chditaf0qp21uipo8va9fp8q8.apps.googleusercontent.com}"

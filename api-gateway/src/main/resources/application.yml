@@ -1,0 +1,113 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: auth-route
+              uri: lb://USER-SERVICE
+              predicates:
+                - Path=/api/auth/**
+
+            - id: users-route
+              uri: lb://USER-SERVICE
+              predicates:
+                - Path=/api/users/**
+
+            - id: admin-route
+              uri: lb://USER-SERVICE
+              predicates:
+                - Path=/api/admin/**
+
+            - id: avatars-route
+              uri: lb://USER-SERVICE
+              predicates:
+                - Path=/api/avatars/**
+
+            - id: courses-route
+              uri: lb://COURSE-SERVICE
+              predicates:
+                - Path=/api/courses/**
+
+            - id: chapters-route
+              uri: lb://COURSE-SERVICE
+              predicates:
+                - Path=/api/chapters/**
+
+            - id: videos-route
+              uri: lb://COURSE-SERVICE
+              predicates:
+                - Path=/api/videos/**
+
+            - id: quizzes-route
+              uri: lb://COURSE-SERVICE
+              predicates:
+                - Path=/api/quizzes/**
+
+            - id: certificates-route
+              uri: lb://COURSE-SERVICE
+              predicates:
+                - Path=/api/certificates/**
+
+            - id: enrollments-route
+              uri: lb://COURSE-SERVICE
+              predicates:
+                - Path=/api/enrollments/**
+
+            - id: notifications-route
+              uri: lb://NOTIFICATION-SERVICE
+              predicates:
+                - Path=/api/notifications/**
+
+            - id: trainings-route
+              uri: lb://TRAINING-SERVICE
+              predicates:
+                - Path=/api/trainings/**
+
+            - id: sessions-route
+              uri: lb://TRAINING-SERVICE
+              predicates:
+                - Path=/api/sessions/**
+
+            - id: recordings-route
+              uri: lb://TRAINING-SERVICE
+              predicates:
+                - Path=/api/recordings/**
+
+            - id: calendar-route
+              uri: lb://TRAINING-SERVICE
+              predicates:
+                - Path=/api/calendar/**
+
+            - id: training-enrollment-service
+              uri: lb://TRAINING-SERVICE
+              predicates:
+                - Path=/api/training-enrollments/**
+
+            # NOUVEAU — FORUM-SERVICE. Une seule route suffit : tous les
+            # endpoints du service (posts, bookmarks, upvotes, commentaires)
+            # vivent sous /api/forum/**.
+            - id: forum-route
+              uri: lb://FORUM-SERVICE
+              predicates:
+                - Path=/api/forum/**
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

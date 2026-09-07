@@ -1,0 +1,20 @@
+# Root-level excludes for the OMARISE backend mono-folder (7 Spring Boot services).
+# Each service already has its own .gitignore (target/, .idea/, etc.) — this one
+# only needs to cover things that sit directly at this root, one level up from
+# any service's own .gitignore.
+
+# Root-level IntelliJ project files (each service also has its own .idea/, already
+# covered by its own .gitignore)
+.idea/
+
+# Local scratch/output from AI-assisted development sessions — demo data, seed
+# scripts, prompts — not part of the actual services. Remove this line if you'd
+# rather keep this folder in the repo.
+Claude outputs/
+
+# Per-service local secrets profile (contains real credentials — never commit)
+**/application-local.yml
+
+# OS cruft
+.DS_Store
+Thumbs.db

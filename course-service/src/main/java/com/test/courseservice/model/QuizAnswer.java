@@ -1,0 +1,15 @@
+package com.test.courseservice.model;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class QuizAnswer {
+    private String questionId;
+    private String selectedOptionId;
+}
