@@ -4,7 +4,6 @@ import com.test.courseservice.dto.ChapterCreateRequest;
 import com.test.courseservice.dto.ChapterResponse;
 import com.test.courseservice.dto.ChapterUpdateRequest;
 import com.test.courseservice.exception.ChapterNotFoundException;
-import com.test.courseservice.exception.CourseAccessDeniedException;
 import com.test.courseservice.exception.NotCourseOwnerException;
 import com.test.courseservice.exception.ResourceNotFoundException;
 import com.test.courseservice.model.Chapter;
@@ -49,7 +48,7 @@ public class ChapterService {
     public List<ChapterResponse> getChaptersByCourse(String courseId, AuthenticatedUser currentUser) {
 
         Course course = resolveCourse(courseId);
-        assertViewAccess(course, currentUser);
+        CourseAccessPolicy.assertViewAccess(course, currentUser);
 
         return chapterRepository.findByCourseIdOrderByOrderAsc(courseId).stream()
                 .map(this::toResponse)
@@ -60,7 +59,7 @@ public class ChapterService {
 
         Chapter chapter = resolveChapter(id);
         Course course = resolveCourse(chapter.getCourseId());
-        assertViewAccess(course, currentUser);
+        CourseAccessPolicy.assertViewAccess(course, currentUser);
 
         return toResponse(chapter);
     }
@@ -98,25 +97,6 @@ public class ChapterService {
     private Chapter resolveChapter(String id) {
         return chapterRepository.findById(id)
                 .orElseThrow(() -> new ChapterNotFoundException("Chapter not found with id: " + id));
-    }
-
-    /** Même logique que CourseService.assertViewAccess — dupliquée volontairement, sans dépendance croisée entre les deux services internes. */
-    private void assertViewAccess(Course course, AuthenticatedUser currentUser) {
-        switch (currentUser.role()) {
-            case "ADMIN" -> {
-                // Les administrateurs n'ont aucune restriction d'accès à vérifier
-            }
-            case "FORMATEUR" -> {
-                if (!course.getInstructorId().equals(currentUser.userId())) {
-                    throw new CourseAccessDeniedException("This course does not belong to you");
-                }
-            }
-            default -> {
-                if (!Boolean.TRUE.equals(course.getPublished())) {
-                    throw new CourseAccessDeniedException("This course is not available");
-                }
-            }
-        }
     }
 
     private void assertManageAccess(Course course, AuthenticatedUser currentUser) {

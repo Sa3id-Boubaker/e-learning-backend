@@ -60,7 +60,7 @@ public class VideoService {
 
         Chapter chapter = resolveChapter(chapterId);
         Course course = resolveCourse(chapter.getCourseId());
-        assertViewAccess(course, currentUser);
+        CourseAccessPolicy.assertViewAccess(course, currentUser);
 
         boolean maskUrl = shouldMaskVideoUrl(course, currentUser);
 
@@ -74,7 +74,7 @@ public class VideoService {
         Video video = resolveVideo(id);
         Chapter chapter = resolveChapter(video.getChapterId());
         Course course = resolveCourse(chapter.getCourseId());
-        assertViewAccess(course, currentUser);
+        CourseAccessPolicy.assertViewAccess(course, currentUser);
 
         boolean maskUrl = shouldMaskVideoUrl(course, currentUser);
 
@@ -122,26 +122,6 @@ public class VideoService {
     private Course resolveCourse(String courseId) {
         return courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + courseId));
-    }
-
-    private void assertViewAccess(Course course, AuthenticatedUser currentUser) {
-        switch (currentUser.role()) {
-            case "ADMIN" -> {
-                // ADMIN has unrestricted view access — nothing to assert
-            }
-            case "FORMATEUR" -> {
-                if (!course.getInstructorId().equals(currentUser.userId())) {
-                    throw new CourseAccessDeniedException("This course does not belong to you");
-                }
-            }
-            default -> {
-                if (!Boolean.TRUE.equals(course.getPublished())) {
-                    throw new CourseAccessDeniedException("This course is not available");
-                }
-                // Plus de blocage ici — un étudiant non inscrit peut consulter la liste des
-                // vidéos ; seul videoUrl est masqué, voir shouldMaskVideoUrl()/toResponse().
-            }
-        }
     }
 
     private void assertManageAccess(Course course, AuthenticatedUser currentUser) {

@@ -139,7 +139,7 @@ public class CourseService {
 
     public CourseResponse getCourseById(String id, AuthenticatedUser currentUser) {
         Course course = resolveCourse(id);
-        assertViewAccess(course, currentUser);
+        CourseAccessPolicy.assertViewAccess(course, currentUser);
 
         if (ROLE_ADMIN.equals(currentUser.role())) {
             return toEnrichedResponse(course, currentUser.token());
@@ -263,24 +263,6 @@ public class CourseService {
     private Course resolveCourse(String id) {
         return courseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + id));
-    }
-
-    private void assertViewAccess(Course course, AuthenticatedUser currentUser) {
-        switch (currentUser.role()) {
-            case ROLE_ADMIN -> {
-                // Les administrateurs n'ont aucune restriction d'accès à vérifier
-            }
-            case "FORMATEUR" -> {
-                if (!course.getInstructorId().equals(currentUser.userId())) {
-                    throw new CourseAccessDeniedException("This course does not belong to you");
-                }
-            }
-            default -> {
-                if (!Boolean.TRUE.equals(course.getPublished())) {
-                    throw new CourseAccessDeniedException("This course is not available");
-                }
-            }
-        }
     }
 
     private void assertOwnership(Course course, AuthenticatedUser currentUser) {
