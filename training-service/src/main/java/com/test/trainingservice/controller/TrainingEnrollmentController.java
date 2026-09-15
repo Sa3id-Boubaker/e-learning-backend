@@ -25,10 +25,9 @@ public class TrainingEnrollmentController {
     @PostMapping
     public ResponseEntity<TrainingEnrollmentResponse> activate(
             @Valid @RequestBody TrainingEnrollmentCreateRequest request,
-            @AuthenticationPrincipal AuthenticatedUser admin,
             @CookieValue(value = "jwt", required = false) String jwtToken) {
 
-        TrainingEnrollmentService.ActivationOutcome outcome = trainingEnrollmentService.activate(request, admin, jwtToken);
+        TrainingEnrollmentService.ActivationOutcome outcome = trainingEnrollmentService.activate(request, jwtToken);
         HttpStatus status = outcome.created() ? HttpStatus.CREATED : HttpStatus.OK;
         return ResponseEntity.status(status).body(outcome.response());
     }
@@ -58,10 +57,9 @@ public class TrainingEnrollmentController {
     @DeleteMapping("/{id}")
     public ResponseEntity<TrainingEnrollmentResponse> revoke(
             @PathVariable String id,
-            @AuthenticationPrincipal AuthenticatedUser admin,
             @CookieValue(value = "jwt", required = false) String jwtToken) {
 
-        return ResponseEntity.ok(trainingEnrollmentService.revoke(id, admin, jwtToken));
+        return ResponseEntity.ok(trainingEnrollmentService.revoke(id, jwtToken));
     }
 
     private TrainingEnrollmentStatus parseStatus(String status) {

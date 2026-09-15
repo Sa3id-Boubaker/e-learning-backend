@@ -45,6 +45,7 @@ public class VideoService {
                 .description(request.getDescription())
                 .videoUrl(uploadResult.url())
                 .videoPublicId(uploadResult.publicId())
+                .subtitleUrl(uploadResult.subtitleUrl())
                 .duration(uploadResult.duration())
                 .order(request.getOrder())
                 .createdAt(now)
@@ -125,7 +126,9 @@ public class VideoService {
 
     private void assertViewAccess(Course course, AuthenticatedUser currentUser) {
         switch (currentUser.role()) {
-            case "ADMIN" -> { }
+            case "ADMIN" -> {
+                // ADMIN has unrestricted view access — nothing to assert
+            }
             case "FORMATEUR" -> {
                 if (!course.getInstructorId().equals(currentUser.userId())) {
                     throw new CourseAccessDeniedException("This course does not belong to you");
@@ -164,6 +167,9 @@ public class VideoService {
                 .title(video.getTitle())
                 .description(video.getDescription())
                 .videoUrl(maskUrl ? null : video.getVideoUrl())
+                // Meme regle de masquage que videoUrl : un etudiant non inscrit ne doit pas
+                // recuperer l'URL des sous-titres d'un contenu auquel il n'a pas acces.
+                .subtitleUrl(maskUrl ? null : video.getSubtitleUrl())
                 .duration(video.getDuration())
                 .order(video.getOrder())
                 .createdAt(video.getCreatedAt())

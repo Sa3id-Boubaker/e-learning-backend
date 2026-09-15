@@ -54,6 +54,14 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class TrainingEnrollmentService {
 
+    private static final String FIELD_TRAINING_ID = "trainingId";
+    private static final String FIELD_CREATED_AT = "createdAt";
+    private static final String FIELD_AMOUNT_AT_ENROLLMENT = "amountAtEnrollment";
+    private static final String ALIAS_REVENUE = "revenue";
+    private static final String ALIAS_COUNT = "count";
+    private static final String SORT_BY_COUNT = "count";
+    private static final String ALIAS_ENROLLMENT_COUNT = "enrollmentCount";
+
     private final TrainingEnrollmentRepository trainingEnrollmentRepository;
     private final TrainingRepository trainingRepository;
     private final TrainingService trainingService;
@@ -66,7 +74,7 @@ public class TrainingEnrollmentService {
     public record ActivationOutcome(TrainingEnrollmentResponse response, boolean created) {
     }
 
-    public ActivationOutcome activate(TrainingEnrollmentCreateRequest request, AuthenticatedUser admin, String jwtToken) {
+    public ActivationOutcome activate(TrainingEnrollmentCreateRequest request, String jwtToken) {
         Training training = trainingRepository.findById(request.getTrainingId())
                 .orElseThrow(() -> new TrainingNotFoundException("Training not found: " + request.getTrainingId()));
 
@@ -151,7 +159,7 @@ public class TrainingEnrollmentService {
         return new ActivationOutcome(toResponse(enrollment, training.getTitle(), student), created);
     }
 
-    public TrainingEnrollmentResponse revoke(String id, AuthenticatedUser admin, String jwtToken) {
+    public TrainingEnrollmentResponse revoke(String id, String jwtToken) {
         TrainingEnrollment enrollment = trainingEnrollmentRepository.findById(id)
                 .orElseThrow(() -> new TrainingEnrollmentNotFoundException("Enrollment not found: " + id));
 
@@ -218,7 +226,7 @@ public class TrainingEnrollmentService {
                                                               int page, int size, String jwtToken) {
         List<Criteria> criteria = new ArrayList<>();
         if (trainingId != null && !trainingId.isBlank()) {
-            criteria.add(Criteria.where("trainingId").is(trainingId));
+            criteria.add(Criteria.where(FIELD_TRAINING_ID).is(trainingId));
         }
         if (studentId != null && !studentId.isBlank()) {
             criteria.add(Criteria.where("studentId").is(studentId));
@@ -230,7 +238,7 @@ public class TrainingEnrollmentService {
                 ? new Criteria()
                 : new Criteria().andOperator(criteria.toArray(new Criteria[0]));
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, FIELD_CREATED_AT));
         Query pagedQuery = Query.query(combined).with(pageable);
         Query countQuery = Query.query(combined);
 
@@ -370,7 +378,7 @@ public class TrainingEnrollmentService {
     public TrainingEnrollmentStatsResponse getEnrollmentStats() {
         Aggregation totalAgg = Aggregation.newAggregation(
                 Aggregation.group()
-                        .sum("amountAtEnrollment").as("totalRevenue")
+                        .sum(FIELD_AMOUNT_AT_ENROLLMENT).as("totalRevenue")
                         .count().as("totalCount")
         );
         Document totalDoc = mongoTemplate.aggregate(totalAgg, TrainingEnrollment.class, Document.class).getUniqueMappedResult();
@@ -383,13 +391,13 @@ public class TrainingEnrollmentService {
         LocalDateTime windowStart = sevenDaysAgo.atStartOfDay();
 
         Aggregation dailyAgg = Aggregation.newAggregation(
-                Aggregation.match(Criteria.where("createdAt").gte(windowStart)),
+                Aggregation.match(Criteria.where(FIELD_CREATED_AT).gte(windowStart)),
                 Aggregation.project()
-                        .and(DateOperators.DateToString.dateOf("createdAt").toString("%Y-%m-%d")).as("day")
-                        .and("amountAtEnrollment").as("amountAtEnrollment"),
+                        .and(DateOperators.DateToString.dateOf(FIELD_CREATED_AT).toString("%Y-%m-%d")).as("day")
+                        .and(FIELD_AMOUNT_AT_ENROLLMENT).as(FIELD_AMOUNT_AT_ENROLLMENT),
                 Aggregation.group("day")
-                        .sum("amountAtEnrollment").as("revenue")
-                        .count().as("count")
+                        .sum(FIELD_AMOUNT_AT_ENROLLMENT).as(ALIAS_REVENUE)
+                        .count().as(ALIAS_COUNT)
         );
         List<Document> dailyResults = mongoTemplate.aggregate(dailyAgg, TrainingEnrollment.class, Document.class).getMappedResults();
 
@@ -405,8 +413,8 @@ public class TrainingEnrollmentService {
             Document doc = byDate.get(key);
             dailyStats.add(TrainingEnrollmentDailyStat.builder()
                     .date(key)
-                    .revenue(doc != null ? toBigDecimal(doc.get("revenue")) : BigDecimal.ZERO)
-                    .count(doc != null ? toLong(doc.get("count")) : 0L)
+                    .revenue(doc != null ? toBigDecimal(doc.get(ALIAS_REVENUE)) : BigDecimal.ZERO)
+                    .count(doc != null ? toLong(doc.get(ALIAS_COUNT)) : 0L)
                     .build());
         }
 
@@ -425,12 +433,12 @@ public class TrainingEnrollmentService {
      */
     public List<TopTrainingResponse> getTopTrainings(int limit, String sortBy) {
         int safeLimit = Math.min(Math.max(limit, 1), 20);
-        String sortField = "count".equalsIgnoreCase(sortBy) ? "enrollmentCount" : "revenue";
+        String sortField = SORT_BY_COUNT.equalsIgnoreCase(sortBy) ? ALIAS_ENROLLMENT_COUNT : ALIAS_REVENUE;
 
         Aggregation aggregation = Aggregation.newAggregation(
-                Aggregation.group("trainingId")
-                        .sum("amountAtEnrollment").as("revenue")
-                        .count().as("enrollmentCount"),
+                Aggregation.group(FIELD_TRAINING_ID)
+                        .sum(FIELD_AMOUNT_AT_ENROLLMENT).as(ALIAS_REVENUE)
+                        .count().as(ALIAS_ENROLLMENT_COUNT),
                 Aggregation.sort(Sort.Direction.DESC, sortField),
                 Aggregation.limit(safeLimit)
         );
@@ -447,8 +455,8 @@ public class TrainingEnrollmentService {
                     return TopTrainingResponse.builder()
                             .trainingId(trainingId)
                             .trainingTitle(titlesById.get(trainingId))
-                            .enrollmentCount(toLong(doc.get("enrollmentCount")))
-                            .revenue(toBigDecimal(doc.get("revenue")))
+                            .enrollmentCount(toLong(doc.get(ALIAS_ENROLLMENT_COUNT)))
+                            .revenue(toBigDecimal(doc.get(ALIAS_REVENUE)))
                             .build();
                 })
                 .toList();
@@ -464,9 +472,9 @@ public class TrainingEnrollmentService {
         int safeLimit = Math.min(Math.max(limit, 1), 20);
 
         Aggregation aggregation = Aggregation.newAggregation(
-                Aggregation.group("trainingId")
-                        .count().as("enrollmentCount"),
-                Aggregation.sort(Sort.Direction.DESC, "enrollmentCount"),
+                Aggregation.group(FIELD_TRAINING_ID)
+                        .count().as(ALIAS_ENROLLMENT_COUNT),
+                Aggregation.sort(Sort.Direction.DESC, ALIAS_ENROLLMENT_COUNT),
                 Aggregation.limit(safeLimit)
         );
 
@@ -482,7 +490,7 @@ public class TrainingEnrollmentService {
                     return PopularTrainingResponse.builder()
                             .trainingId(trainingId)
                             .trainingTitle(titlesById.get(trainingId))
-                            .enrollmentCount(toLong(doc.get("enrollmentCount")))
+                            .enrollmentCount(toLong(doc.get(ALIAS_ENROLLMENT_COUNT)))
                             .build();
                 })
                 .toList();
@@ -507,11 +515,11 @@ public class TrainingEnrollmentService {
         }
 
         Aggregation aggregation = Aggregation.newAggregation(
-                Aggregation.match(Criteria.where("trainingId").in(ownedTrainingIds)),
-                Aggregation.group("trainingId")
-                        .sum("amountAtEnrollment").as("revenue")
-                        .count().as("enrollmentCount"),
-                Aggregation.sort(Sort.Direction.DESC, "revenue")
+                Aggregation.match(Criteria.where(FIELD_TRAINING_ID).in(ownedTrainingIds)),
+                Aggregation.group(FIELD_TRAINING_ID)
+                        .sum(FIELD_AMOUNT_AT_ENROLLMENT).as(ALIAS_REVENUE)
+                        .count().as(ALIAS_ENROLLMENT_COUNT),
+                Aggregation.sort(Sort.Direction.DESC, ALIAS_REVENUE)
         );
 
         List<Document> results = mongoTemplate.aggregate(aggregation, TrainingEnrollment.class, Document.class).getMappedResults();
@@ -526,8 +534,8 @@ public class TrainingEnrollmentService {
                     return TopTrainingResponse.builder()
                             .trainingId(trainingId)
                             .trainingTitle(titlesById.get(trainingId))
-                            .enrollmentCount(toLong(doc.get("enrollmentCount")))
-                            .revenue(toBigDecimal(doc.get("revenue")))
+                            .enrollmentCount(toLong(doc.get(ALIAS_ENROLLMENT_COUNT)))
+                            .revenue(toBigDecimal(doc.get(ALIAS_REVENUE)))
                             .build();
                 })
                 .toList();

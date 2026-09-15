@@ -1,7 +1,6 @@
 package com.test.forumservice.repository;
 
 import com.test.forumservice.entity.ForumUpvote;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
 import java.util.List;

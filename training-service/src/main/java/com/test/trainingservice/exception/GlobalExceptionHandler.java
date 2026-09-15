@@ -87,7 +87,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<Map<String, Object>> handleMaxUploadSize(MaxUploadSizeExceededException ex) {
-        return buildResponse(HttpStatus.PAYLOAD_TOO_LARGE, "File size exceeds the maximum allowed limit");
+        return buildResponse(HttpStatus.CONTENT_TOO_LARGE, "File size exceeds the maximum allowed limit");
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -117,17 +117,17 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(LiveSessionNotFoundException.class)
-    public ResponseEntity<?> handleLiveSessionNotFound(LiveSessionNotFoundException ex) {
+    public ResponseEntity<Map<String, Object>> handleLiveSessionNotFound(LiveSessionNotFoundException ex) {
         return buildResponse(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
     @ExceptionHandler(InvalidSessionTimeRangeException.class)
-    public ResponseEntity<?> handleInvalidSessionTimeRange(InvalidSessionTimeRangeException ex) {
+    public ResponseEntity<Map<String, Object>> handleInvalidSessionTimeRange(InvalidSessionTimeRangeException ex) {
         return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
     @ExceptionHandler(SessionConflictException.class)
-    public ResponseEntity<?> handleSessionConflict(SessionConflictException ex) {
+    public ResponseEntity<Map<String, Object>> handleSessionConflict(SessionConflictException ex) {
         return buildResponse(HttpStatus.CONFLICT, ex.getMessage());
     }
 

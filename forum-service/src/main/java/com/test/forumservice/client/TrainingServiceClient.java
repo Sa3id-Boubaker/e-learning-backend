@@ -19,6 +19,9 @@ import org.springframework.web.client.RestClientException;
 @Slf4j
 public class TrainingServiceClient {
 
+    private static final String TRAINING_URI = "/api/trainings/{id}";
+    private static final String TRAINING_KIND = "training";
+
     private final RestClient restClient;
 
     public TrainingServiceClient(@LoadBalanced RestClient.Builder builder) {
@@ -28,7 +31,7 @@ public class TrainingServiceClient {
     // ---- Affichage (tolérant) ----
 
     public ForumReferenceSummary getTraining(String trainingId, String jwtToken) {
-        TrainingRaw raw = fetchOrNull("/api/trainings/{id}", trainingId, jwtToken, "training", TrainingRaw.class);
+        TrainingRaw raw = fetchOrNull(TRAINING_URI, trainingId, jwtToken, TRAINING_KIND, TrainingRaw.class);
         return raw == null ? null : new ForumReferenceSummary(raw.id(), raw.title());
     }
 
@@ -39,7 +42,7 @@ public class TrainingServiceClient {
      * notification plutôt que faire échouer la création du post.
      */
     public String getTrainingInstructorId(String trainingId, String jwtToken) {
-        TrainingRaw raw = fetchOrNull("/api/trainings/{id}", trainingId, jwtToken, "training", TrainingRaw.class);
+        TrainingRaw raw = fetchOrNull(TRAINING_URI, trainingId, jwtToken, TRAINING_KIND, TrainingRaw.class);
         return raw == null ? null : raw.instructorId();
     }
 
@@ -73,7 +76,7 @@ public class TrainingServiceClient {
     // ---- Validation de chaîne (strict, création uniquement) ----
 
     public ForumReferenceSummary getTrainingRef(String trainingId, String jwtToken) {
-        TrainingRaw raw = fetchStrict("/api/trainings/{id}", trainingId, jwtToken, "training", TrainingRaw.class);
+        TrainingRaw raw = fetchStrict(TRAINING_URI, trainingId, jwtToken, TRAINING_KIND, TrainingRaw.class);
         return raw == null ? null : new ForumReferenceSummary(raw.id(), raw.title());
     }
 

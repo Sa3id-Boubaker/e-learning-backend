@@ -37,6 +37,12 @@ public class Recording {
     /** Cloudinary secure_url — the public delivery URL used by the frontend video player. */
     private String videoUrl;
 
+    /**
+     * Public URL of the auto-generated .vtt transcript (Cloudinary "Google AI Video
+     * Transcription" add-on). Null unless cloudinary.video-transcription-enabled is true.
+     */
+    private String subtitleUrl;
+
     /** Cloudinary public_id — internal technical field, NEVER exposed in any response DTO. */
     private String videoPublicId;
 

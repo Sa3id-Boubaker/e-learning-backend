@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import com.test.forumservice.dto.ForumPostListFilter;
 
 @RestController
 @RequiredArgsConstructor
@@ -43,8 +44,8 @@ public class ForumPostController {
             @RequestParam(defaultValue = "10") int size,
             @AuthenticationPrincipal AuthenticatedUser user) {
 
-        return ResponseEntity.ok(
-                forumPostService.listPosts(parseType(type), courseId, trainingId, authorId, sort, page, size, user));
+        ForumPostListFilter filter = new ForumPostListFilter(parseType(type), courseId, trainingId, authorId, sort);
+        return ResponseEntity.ok(forumPostService.listPosts(filter, page, size, user));
     }
 
     /**

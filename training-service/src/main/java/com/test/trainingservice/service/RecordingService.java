@@ -58,6 +58,7 @@ public class RecordingService {
                 .title(session.getTitle() + " - Replay")
                 .description(null)
                 .videoUrl(uploaded.url())
+                .subtitleUrl(uploaded.subtitleUrl())
                 .videoPublicId(uploaded.publicId())
                 .duration(uploaded.durationSeconds())
                 .createdAt(LocalDateTime.now())
@@ -130,6 +131,7 @@ public class RecordingService {
         String previousPublicId = recording.getVideoPublicId();
 
         recording.setVideoUrl(uploaded.url());
+        recording.setSubtitleUrl(uploaded.subtitleUrl());
         recording.setVideoPublicId(uploaded.publicId());
         recording.setDuration(uploaded.durationSeconds());
         recording.setUpdatedAt(LocalDateTime.now());
@@ -186,6 +188,7 @@ public class RecordingService {
                 .title(recording.getTitle())
                 .description(recording.getDescription())
                 .videoUrl(recording.getVideoUrl())
+                .subtitleUrl(recording.getSubtitleUrl())
                 .duration(recording.getDuration())
                 .createdAt(recording.getCreatedAt())
                 .updatedAt(recording.getUpdatedAt())

@@ -11,6 +11,7 @@ import com.test.forumservice.exception.ForumAccessDeniedException;
 import com.test.forumservice.exception.ForumPostNotFoundException;
 import com.test.forumservice.exception.InvalidForumReferenceException;
 import com.test.forumservice.mapper.ForumPostMapper;
+import com.test.forumservice.mapper.ForumPostReferences;
 import com.test.forumservice.repository.ForumBookmarkRepository;
 import com.test.forumservice.repository.ForumCommentRepository;
 import com.test.forumservice.repository.ForumPostRepository;
@@ -192,22 +193,20 @@ public class ForumPostService {
         return buildResponse(post, user);
     }
 
-    public PageResponse<ForumPostResponse> listPosts(ForumPostType type, String courseId, String trainingId,
-                                                     String authorId, String sort, int page, int size,
-                                                     AuthenticatedUser user) {
+    public PageResponse<ForumPostResponse> listPosts(ForumPostListFilter filter, int page, int size, AuthenticatedUser user) {
         Query query = new Query();
         List<Criteria> criteria = new ArrayList<>();
-        if (type != null) criteria.add(Criteria.where("type").is(type));
-        if (courseId != null) criteria.add(Criteria.where("courseId").is(courseId));
-        if (trainingId != null) criteria.add(Criteria.where("trainingId").is(trainingId));
-        if (authorId != null) criteria.add(Criteria.where("authorId").is(authorId));
+        if (filter.type() != null) criteria.add(Criteria.where("type").is(filter.type()));
+        if (filter.courseId() != null) criteria.add(Criteria.where("courseId").is(filter.courseId()));
+        if (filter.trainingId() != null) criteria.add(Criteria.where("trainingId").is(filter.trainingId()));
+        if (filter.authorId() != null) criteria.add(Criteria.where("authorId").is(filter.authorId()));
         if (!criteria.isEmpty()) {
             query.addCriteria(new Criteria().andOperator(criteria.toArray(new Criteria[0])));
         }
 
         long total = mongoTemplate.count(query, ForumPost.class);
 
-        Sort sortSpec = "popular".equalsIgnoreCase(sort)
+        Sort sortSpec = "popular".equalsIgnoreCase(filter.sort())
                 ? Sort.by(Sort.Direction.DESC, "upvoteCount").and(Sort.by(Sort.Direction.DESC, "createdAt"))
                 : Sort.by(Sort.Direction.DESC, "createdAt");
 
@@ -268,8 +267,12 @@ public class ForumPostService {
     public ForumPostResponse buildResponse(ForumPost post, AuthenticatedUser user) {
         ForumAuthorSummary author = userServiceClient.getBasicInfo(post.getAuthorId(), user.token());
 
-        ForumReferenceSummary course = null, chapter = null, video = null;
-        ForumReferenceSummary training = null, liveSession = null, recording = null;
+        ForumReferenceSummary course = null;
+        ForumReferenceSummary chapter = null;
+        ForumReferenceSummary video = null;
+        ForumReferenceSummary training = null;
+        ForumReferenceSummary liveSession = null;
+        ForumReferenceSummary recording = null;
 
         if (post.getType() == ForumPostType.COURSE) {
             course = courseServiceClient.getCourse(post.getCourseId(), user.token());
@@ -284,7 +287,7 @@ public class ForumPostService {
         boolean bookmarked = bookmarkRepository.existsByUserIdAndPostId(user.userId(), post.getId());
         boolean upvoted = upvoteRepository.existsByUserIdAndPostId(user.userId(), post.getId());
 
-        return forumPostMapper.toResponse(post, author, course, chapter, video, training, liveSession, recording, bookmarked, upvoted);
+        return forumPostMapper.toResponse(post, author, new ForumPostReferences(course, chapter, video, training, liveSession, recording), bookmarked, upvoted);
     }
 
     /**
@@ -303,6 +306,12 @@ public class ForumPostService {
      * de ce que ce cache est censé faire. Fix : les caches stockent désormais
      * Optional<...> (via Optional.ofNullable), donc un échec est lui aussi
      * mémorisé pour la durée de la page.
+     *
+     * REFACTORISÉ (java:S3776) : la résolution des références par type de post
+     * (COURSE vs TRAINING, avec ses sous-branches chapter/video ou
+     * liveSession/recording) est extraite dans resolveReferencesCached(...) —
+     * comportement et cache partagé strictement identiques, juste déplacés
+     * pour ramener la complexité cognitive de cette méthode sous le seuil.
      */
     private List<ForumPostResponse> buildResponsesBatched(List<ForumPost> posts, AuthenticatedUser user) {
         if (posts.isEmpty()) return List.of();
@@ -321,38 +330,49 @@ public class ForumPostService {
             ForumAuthorSummary author = authorCache.computeIfAbsent(post.getAuthorId(),
                     id -> Optional.ofNullable(userServiceClient.getBasicInfo(id, user.token()))).orElse(null);
 
-            ForumReferenceSummary course = null, chapter = null, video = null;
-            ForumReferenceSummary training = null, liveSession = null, recording = null;
-
-            if (post.getType() == ForumPostType.COURSE) {
-                course = refCache.computeIfAbsent("course:" + post.getCourseId(),
-                        k -> Optional.ofNullable(courseServiceClient.getCourse(post.getCourseId(), user.token()))).orElse(null);
-                if (post.getChapterId() != null) {
-                    chapter = refCache.computeIfAbsent("chapter:" + post.getChapterId(),
-                            k -> Optional.ofNullable(courseServiceClient.getChapter(post.getChapterId(), user.token()))).orElse(null);
-                }
-                if (post.getVideoId() != null) {
-                    video = refCache.computeIfAbsent("video:" + post.getVideoId(),
-                            k -> Optional.ofNullable(courseServiceClient.getVideo(post.getVideoId(), user.token()))).orElse(null);
-                }
-            } else {
-                training = refCache.computeIfAbsent("training:" + post.getTrainingId(),
-                        k -> Optional.ofNullable(trainingServiceClient.getTraining(post.getTrainingId(), user.token()))).orElse(null);
-                if (post.getLiveSessionId() != null) {
-                    liveSession = refCache.computeIfAbsent("session:" + post.getLiveSessionId(),
-                            k -> Optional.ofNullable(trainingServiceClient.getLiveSession(post.getLiveSessionId(), user.token()))).orElse(null);
-                }
-                if (post.getRecordingId() != null) {
-                    recording = refCache.computeIfAbsent("recording:" + post.getRecordingId(),
-                            k -> Optional.ofNullable(trainingServiceClient.getRecording(post.getRecordingId(), user.token()))).orElse(null);
-                }
-            }
+            ForumPostReferences references = resolveReferencesCached(post, user, refCache);
 
             boolean bookmarked = bookmarkedIds.contains(post.getId());
             boolean upvoted = upvotedIds.contains(post.getId());
 
-            result.add(forumPostMapper.toResponse(post, author, course, chapter, video, training, liveSession, recording, bookmarked, upvoted));
+            result.add(forumPostMapper.toResponse(post, author, references, bookmarked, upvoted));
         }
         return result;
+    }
+
+    private ForumPostReferences resolveReferencesCached(ForumPost post, AuthenticatedUser user,
+                                                        Map<String, Optional<ForumReferenceSummary>> refCache) {
+        ForumReferenceSummary course = null;
+        ForumReferenceSummary chapter = null;
+        ForumReferenceSummary video = null;
+        ForumReferenceSummary training = null;
+        ForumReferenceSummary liveSession = null;
+        ForumReferenceSummary recording = null;
+
+        if (post.getType() == ForumPostType.COURSE) {
+            course = refCache.computeIfAbsent("course:" + post.getCourseId(),
+                    k -> Optional.ofNullable(courseServiceClient.getCourse(post.getCourseId(), user.token()))).orElse(null);
+            if (post.getChapterId() != null) {
+                chapter = refCache.computeIfAbsent("chapter:" + post.getChapterId(),
+                        k -> Optional.ofNullable(courseServiceClient.getChapter(post.getChapterId(), user.token()))).orElse(null);
+            }
+            if (post.getVideoId() != null) {
+                video = refCache.computeIfAbsent("video:" + post.getVideoId(),
+                        k -> Optional.ofNullable(courseServiceClient.getVideo(post.getVideoId(), user.token()))).orElse(null);
+            }
+        } else {
+            training = refCache.computeIfAbsent("training:" + post.getTrainingId(),
+                    k -> Optional.ofNullable(trainingServiceClient.getTraining(post.getTrainingId(), user.token()))).orElse(null);
+            if (post.getLiveSessionId() != null) {
+                liveSession = refCache.computeIfAbsent("session:" + post.getLiveSessionId(),
+                        k -> Optional.ofNullable(trainingServiceClient.getLiveSession(post.getLiveSessionId(), user.token()))).orElse(null);
+            }
+            if (post.getRecordingId() != null) {
+                recording = refCache.computeIfAbsent("recording:" + post.getRecordingId(),
+                        k -> Optional.ofNullable(trainingServiceClient.getRecording(post.getRecordingId(), user.token()))).orElse(null);
+            }
+        }
+
+        return new ForumPostReferences(course, chapter, video, training, liveSession, recording);
     }
 }

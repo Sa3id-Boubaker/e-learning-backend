@@ -24,6 +24,7 @@ public class Video {
     private String description;
     private String videoUrl;
     private String videoPublicId;
+    private String subtitleUrl;
     private Integer duration;
     private Integer order;
 

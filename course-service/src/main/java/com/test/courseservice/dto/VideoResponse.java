@@ -21,6 +21,9 @@ public class VideoResponse {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private String videoUrl;
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String subtitleUrl;
+
     private Integer duration;
     private Integer order;
     private LocalDateTime createdAt;

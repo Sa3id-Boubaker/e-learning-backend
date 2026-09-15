@@ -33,6 +33,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CourseService {
 
+    private static final String ROLE_ADMIN = "ADMIN";
+
     private final CourseRepository courseRepository;
     private final CloudinaryService cloudinaryService;
     private final UserServiceClient userServiceClient;
@@ -51,7 +53,7 @@ public class CourseService {
 
         LocalDateTime now = LocalDateTime.now();
 
-        boolean isAdmin = "ADMIN".equals(currentUser.role());
+        boolean isAdmin = ROLE_ADMIN.equals(currentUser.role());
         BigDecimal initialDiscount = (isAdmin && request.getDiscountPercentage() != null)
                 ? request.getDiscountPercentage()
                 : BigDecimal.ZERO;
@@ -63,7 +65,7 @@ public class CourseService {
                 .price(request.getPrice())
                 .discountPercentage(initialDiscount)
                 .instructorId(currentUser.userId())
-                .published(request.getPublished() != null ? request.getPublished() : false)
+                .published(Boolean.TRUE.equals(request.getPublished()))
                 .createdAt(now)
                 .updatedAt(now)
                 .build();
@@ -93,7 +95,7 @@ public class CourseService {
         String safeSearch = hasSearch ? escapeRegex(search.trim()) : null;
 
         Page<Course> coursePage = switch (currentUser.role()) {
-            case "ADMIN" -> hasSearch
+            case ROLE_ADMIN -> hasSearch
                     ? courseRepository.findByTitleContainingIgnoreCase(safeSearch, pageable)
                     : courseRepository.findAll(pageable);
             case "FORMATEUR" -> hasSearch
@@ -104,7 +106,7 @@ public class CourseService {
                     : courseRepository.findByPublishedTrue(pageable);
         };
 
-        boolean enrich = "ADMIN".equals(currentUser.role());
+        boolean enrich = ROLE_ADMIN.equals(currentUser.role());
 
         List<CourseResponse> content = coursePage.getContent().stream()
                 .map(course -> enrich ? toEnrichedResponse(course, currentUser.token()) : toResponse(course))
@@ -139,7 +141,7 @@ public class CourseService {
         Course course = resolveCourse(id);
         assertViewAccess(course, currentUser);
 
-        if ("ADMIN".equals(currentUser.role())) {
+        if (ROLE_ADMIN.equals(currentUser.role())) {
             return toEnrichedResponse(course, currentUser.token());
         }
         return toResponse(course);
@@ -157,7 +159,7 @@ public class CourseService {
         if (request.getPublished() != null) course.setPublished(request.getPublished());
 
         // Un FORMATEUR propriétaire peut appeler cet endpoint, mais jamais modifier la remise par ce biais.
-        if (request.getDiscountPercentage() != null && "ADMIN".equals(currentUser.role())) {
+        if (request.getDiscountPercentage() != null && ROLE_ADMIN.equals(currentUser.role())) {
             course.setDiscountPercentage(request.getDiscountPercentage());
         }
 
@@ -253,7 +255,7 @@ public class CourseService {
     }
 
     private void assertAdminOnly(AuthenticatedUser currentUser) {
-        if (!"ADMIN".equals(currentUser.role())) {
+        if (!ROLE_ADMIN.equals(currentUser.role())) {
             throw new CourseAccessDeniedException("Only an administrator can manage course discounts");
         }
     }
@@ -265,7 +267,9 @@ public class CourseService {
 
     private void assertViewAccess(Course course, AuthenticatedUser currentUser) {
         switch (currentUser.role()) {
-            case "ADMIN" -> { }
+            case ROLE_ADMIN -> {
+                // Les administrateurs n'ont aucune restriction d'accès à vérifier
+            }
             case "FORMATEUR" -> {
                 if (!course.getInstructorId().equals(currentUser.userId())) {
                     throw new CourseAccessDeniedException("This course does not belong to you");
@@ -280,7 +284,7 @@ public class CourseService {
     }
 
     private void assertOwnership(Course course, AuthenticatedUser currentUser) {
-        boolean isAdmin = "ADMIN".equals(currentUser.role());
+        boolean isAdmin = ROLE_ADMIN.equals(currentUser.role());
         boolean isOwner = course.getInstructorId().equals(currentUser.userId());
 
         if (!isAdmin && !isOwner) {

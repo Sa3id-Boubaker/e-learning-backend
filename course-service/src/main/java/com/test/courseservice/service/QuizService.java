@@ -107,7 +107,9 @@ public class QuizService {
 
     void assertViewAccess(Course course, AuthenticatedUser currentUser) {
         switch (currentUser.role()) {
-            case "ADMIN" -> { }
+            case "ADMIN" -> {
+                // ADMIN has unrestricted view access — nothing to assert
+            }
             case "FORMATEUR" -> {
                 if (!course.getInstructorId().equals(currentUser.userId())) {
                     throw new CourseAccessDeniedException("This course does not belong to you");

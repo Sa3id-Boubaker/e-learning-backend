@@ -103,7 +103,9 @@ public class ChapterService {
     /** Même logique que CourseService.assertViewAccess — dupliquée volontairement, sans dépendance croisée entre les deux services internes. */
     private void assertViewAccess(Course course, AuthenticatedUser currentUser) {
         switch (currentUser.role()) {
-            case "ADMIN" -> { }
+            case "ADMIN" -> {
+                // Les administrateurs n'ont aucune restriction d'accès à vérifier
+            }
             case "FORMATEUR" -> {
                 if (!course.getInstructorId().equals(currentUser.userId())) {
                     throw new CourseAccessDeniedException("This course does not belong to you");

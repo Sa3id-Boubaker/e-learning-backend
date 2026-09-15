@@ -35,6 +35,9 @@ cloudinary:
   cloud-name: ${CLOUDINARY_CLOUD_NAME}
   api-key: "${CLOUDINARY_API_KEY}"
   api-secret: ${CLOUDINARY_API_SECRET}
+  # Google AI Video Transcription add-on — keep false until the add-on is actively
+  # subscribed on the Cloudinary account (uploadLarge() throws otherwise, breaking uploads).
+  video-transcription-enabled: ${CLOUDINARY_VIDEO_TRANSCRIPTION_ENABLED:false}
 
 training:
   recording:

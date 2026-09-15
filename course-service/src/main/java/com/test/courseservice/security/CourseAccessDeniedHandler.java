@@ -21,8 +21,8 @@ public class CourseAccessDeniedHandler implements AccessDeniedHandler {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
 
-        String json = """
-                {"timestamp":"%s","status":403,"message":"You do not have permission to perform this action"}""".formatted(LocalDateTime.now());
+        String json = "{\"timestamp\":\"%s\",\"status\":403,\"message\":\"You do not have permission to perform this action\"}"
+                .formatted(LocalDateTime.now());
 
         response.getWriter().write(json);
     }

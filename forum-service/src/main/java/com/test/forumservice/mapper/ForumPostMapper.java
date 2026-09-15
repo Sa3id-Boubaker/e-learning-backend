@@ -2,7 +2,6 @@ package com.test.forumservice.mapper;
 
 import com.test.forumservice.dto.ForumAuthorSummary;
 import com.test.forumservice.dto.ForumPostResponse;
-import com.test.forumservice.dto.ForumReferenceSummary;
 import com.test.forumservice.entity.ForumPost;
 import com.test.forumservice.entity.ForumPostType;
 import org.springframework.stereotype.Component;
@@ -10,9 +9,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class ForumPostMapper {
 
-    public ForumPostResponse toResponse(ForumPost post, ForumAuthorSummary author,
-                                        ForumReferenceSummary course, ForumReferenceSummary chapter, ForumReferenceSummary video,
-                                        ForumReferenceSummary training, ForumReferenceSummary liveSession, ForumReferenceSummary recording,
+    public ForumPostResponse toResponse(ForumPost post, ForumAuthorSummary author, ForumPostReferences references,
                                         boolean bookmarked, boolean upvoted) {
 
         ForumPostResponse.ForumPostResponseBuilder builder = ForumPostResponse.builder()
@@ -29,9 +26,9 @@ public class ForumPostMapper {
                 .updatedAt(post.getUpdatedAt());
 
         if (post.getType() == ForumPostType.COURSE) {
-            builder.course(course).chapter(chapter).video(video);
+            builder.course(references.course()).chapter(references.chapter()).video(references.video());
         } else {
-            builder.training(training).liveSession(liveSession).recording(recording);
+            builder.training(references.training()).liveSession(references.liveSession()).recording(references.recording());
         }
 
         return builder.build();

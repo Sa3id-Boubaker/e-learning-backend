@@ -14,7 +14,6 @@ import com.test.courseservice.model.StudentProgress;
 import com.test.courseservice.repository.*;
 import com.test.courseservice.security.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -55,6 +54,14 @@ public class EnrollmentService {
     private final VideoRepository videoRepository;
     private final StudentProgressRepository studentProgressRepository;
     private final MongoTemplate mongoTemplate;
+
+    private static final String FIELD_COURSE_ID = "courseId";
+    private static final String FIELD_CREATED_AT = "createdAt";
+    private static final String FIELD_AMOUNT_AT_ENROLLMENT = "amountAtEnrollment";
+    private static final String FIELD_REVENUE = "revenue";
+    private static final String FIELD_COUNT = "count";
+    private static final String FIELD_ENROLLMENT_COUNT = "enrollmentCount";
+    private static final String FIELD_COURSE_TITLE = "courseTitle";
 
     public EnrollmentResponse createEnrollment(EnrollmentCreateRequest request, AuthenticatedUser currentUser) {
 
@@ -131,7 +138,7 @@ public class EnrollmentService {
                                                                int page, int size, AuthenticatedUser currentUser) {
         List<Criteria> criteria = new ArrayList<>();
         if (courseId != null && !courseId.isBlank()) {
-            criteria.add(Criteria.where("courseId").is(courseId));
+            criteria.add(Criteria.where(FIELD_COURSE_ID).is(courseId));
         }
         if (studentId != null && !studentId.isBlank()) {
             criteria.add(Criteria.where("studentId").is(studentId));
@@ -221,7 +228,7 @@ public class EnrollmentService {
     private Pageable safePageable(int page, int size) {
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), 100);
-        return PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, FIELD_CREATED_AT));
     }
 
     private EnrollmentResponse toResponse(Enrollment enrollment, boolean includeActivatedBy, String jwtToken) {
@@ -317,7 +324,7 @@ public class EnrollmentService {
     public EnrollmentStatsResponse getEnrollmentStats() {
         Aggregation totalAgg = Aggregation.newAggregation(
                 Aggregation.group()
-                        .sum("amountAtEnrollment").as("totalRevenue")
+                        .sum(FIELD_AMOUNT_AT_ENROLLMENT).as("totalRevenue")
                         .count().as("totalCount")
         );
         Document totalDoc = mongoTemplate.aggregate(totalAgg, Enrollment.class, Document.class).getUniqueMappedResult();
@@ -330,13 +337,13 @@ public class EnrollmentService {
         LocalDateTime windowStart = sevenDaysAgo.atStartOfDay();
 
         Aggregation dailyAgg = Aggregation.newAggregation(
-                Aggregation.match(Criteria.where("createdAt").gte(windowStart)),
+                Aggregation.match(Criteria.where(FIELD_CREATED_AT).gte(windowStart)),
                 Aggregation.project()
-                        .and(DateOperators.DateToString.dateOf("createdAt").toString("%Y-%m-%d")).as("day")
-                        .and("amountAtEnrollment").as("amountAtEnrollment"),
+                        .and(DateOperators.DateToString.dateOf(FIELD_CREATED_AT).toString("%Y-%m-%d")).as("day")
+                        .and(FIELD_AMOUNT_AT_ENROLLMENT).as(FIELD_AMOUNT_AT_ENROLLMENT),
                 Aggregation.group("day")
-                        .sum("amountAtEnrollment").as("revenue")
-                        .count().as("count")
+                        .sum(FIELD_AMOUNT_AT_ENROLLMENT).as(FIELD_REVENUE)
+                        .count().as(FIELD_COUNT)
         );
         List<Document> dailyResults = mongoTemplate.aggregate(dailyAgg, Enrollment.class, Document.class).getMappedResults();
 
@@ -352,8 +359,8 @@ public class EnrollmentService {
             Document doc = byDate.get(key);
             dailyStats.add(EnrollmentDailyStat.builder()
                     .date(key)
-                    .revenue(doc != null ? toBigDecimal(doc.get("revenue")) : BigDecimal.ZERO)
-                    .count(doc != null ? toLong(doc.get("count")) : 0L)
+                    .revenue(doc != null ? toBigDecimal(doc.get(FIELD_REVENUE)) : BigDecimal.ZERO)
+                    .count(doc != null ? toLong(doc.get(FIELD_COUNT)) : 0L)
                     .build());
         }
 
@@ -371,13 +378,13 @@ public class EnrollmentService {
      */
     public List<TopCourseResponse> getTopCourses(int limit, String sortBy) {
         int safeLimit = Math.min(Math.max(limit, 1), 20);
-        String sortField = "count".equalsIgnoreCase(sortBy) ? "enrollmentCount" : "revenue";
+        String sortField = FIELD_COUNT.equalsIgnoreCase(sortBy) ? FIELD_ENROLLMENT_COUNT : FIELD_REVENUE;
 
         Aggregation aggregation = Aggregation.newAggregation(
-                Aggregation.group("courseId")
-                        .first("courseTitle").as("courseTitle")
-                        .sum("amountAtEnrollment").as("revenue")
-                        .count().as("enrollmentCount"),
+                Aggregation.group(FIELD_COURSE_ID)
+                        .first(FIELD_COURSE_TITLE).as(FIELD_COURSE_TITLE)
+                        .sum(FIELD_AMOUNT_AT_ENROLLMENT).as(FIELD_REVENUE)
+                        .count().as(FIELD_ENROLLMENT_COUNT),
                 Aggregation.sort(Sort.Direction.DESC, sortField),
                 Aggregation.limit(safeLimit)
         );
@@ -387,9 +394,9 @@ public class EnrollmentService {
         return results.stream()
                 .map(doc -> TopCourseResponse.builder()
                         .courseId(doc.getString("_id"))
-                        .courseTitle(doc.getString("courseTitle"))
-                        .enrollmentCount(toLong(doc.get("enrollmentCount")))
-                        .revenue(toBigDecimal(doc.get("revenue")))
+                        .courseTitle(doc.getString(FIELD_COURSE_TITLE))
+                        .enrollmentCount(toLong(doc.get(FIELD_ENROLLMENT_COUNT)))
+                        .revenue(toBigDecimal(doc.get(FIELD_REVENUE)))
                         .build())
                 .toList();
     }
@@ -415,12 +422,12 @@ public class EnrollmentService {
         }
 
         Aggregation aggregation = Aggregation.newAggregation(
-                Aggregation.match(Criteria.where("courseId").in(ownedCourseIds)),
-                Aggregation.group("courseId")
-                        .first("courseTitle").as("courseTitle")
-                        .sum("amountAtEnrollment").as("revenue")
-                        .count().as("enrollmentCount"),
-                Aggregation.sort(Sort.Direction.DESC, "revenue")
+                Aggregation.match(Criteria.where(FIELD_COURSE_ID).in(ownedCourseIds)),
+                Aggregation.group(FIELD_COURSE_ID)
+                        .first(FIELD_COURSE_TITLE).as(FIELD_COURSE_TITLE)
+                        .sum(FIELD_AMOUNT_AT_ENROLLMENT).as(FIELD_REVENUE)
+                        .count().as(FIELD_ENROLLMENT_COUNT),
+                Aggregation.sort(Sort.Direction.DESC, FIELD_REVENUE)
         );
 
         List<Document> results = mongoTemplate.aggregate(aggregation, Enrollment.class, Document.class).getMappedResults();
@@ -428,9 +435,9 @@ public class EnrollmentService {
         List<TopCourseResponse> courses = results.stream()
                 .map(doc -> TopCourseResponse.builder()
                         .courseId(doc.getString("_id"))
-                        .courseTitle(doc.getString("courseTitle"))
-                        .enrollmentCount(toLong(doc.get("enrollmentCount")))
-                        .revenue(toBigDecimal(doc.get("revenue")))
+                        .courseTitle(doc.getString(FIELD_COURSE_TITLE))
+                        .enrollmentCount(toLong(doc.get(FIELD_ENROLLMENT_COUNT)))
+                        .revenue(toBigDecimal(doc.get(FIELD_REVENUE)))
                         .build())
                 .toList();
 
