@@ -14,14 +14,6 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                git branch: 'dev',
-                    credentialsId: 'github-ssh-omarise-backend',
-                    url: 'git@github.com:Sa3id-Boubaker/e-learning-backend.git'
-            }
-        }
-
         stage('Verify Environment') {
             steps {
                 sh 'java -version'
