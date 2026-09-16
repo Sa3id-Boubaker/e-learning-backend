@@ -66,6 +66,20 @@ pipeline {
                 }
             }
         }
+
+        stage('Docker Build') {
+            steps {
+                sh 'docker version'
+                script {
+                    env.SERVICES.split(' ').each { svc ->
+                        dir(svc) {
+                            sh "docker build -t omarise-${svc}:${env.BUILD_NUMBER} ."
+                        }
+                    }
+                }
+                sh "docker images --filter=reference='omarise-*'"
+            }
+        }
     }
 
     post {

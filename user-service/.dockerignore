@@ -1,0 +1,8 @@
+target/
+*.iml
+.idea/
+
+# Contient de vrais identifiants MongoDB/JWT/Cloudinary en clair pour le dev local.
+# Sans ce fichier, `COPY src ./src` dans le Dockerfile embarquerait ce fichier dans l'image.
+application-local.yml
+**/application-local.yml
