@@ -32,7 +32,8 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
-                                "/v3/api-docs/**"
+                                "/v3/api-docs/**",
+                                "/actuator/**"
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/trainings").hasAnyRole(ROLE_ADMIN, ROLE_FORMATEUR)
                         .requestMatchers(HttpMethod.PUT, PATH_TRAININGS).hasAnyRole(ROLE_ADMIN, ROLE_FORMATEUR)
