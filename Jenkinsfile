@@ -103,6 +103,20 @@ pipeline {
                 sh "docker images --filter=reference='${env.REGISTRY}/${env.REGISTRY_NAMESPACE}/omarise-*'"
             }
         }
+
+        stage('Cleanup Old GHCR Versions') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'omarise-docker-registry', usernameVariable: 'REGISTRY_USER', passwordVariable: 'REGISTRY_TOKEN')]) {
+                    script {
+                        env.SERVICES.split(' ').each { svc ->
+                            withEnv(["PACKAGE_NAME=omarise-${svc}"]) {
+                                sh 'chmod +x scripts/cleanup-ghcr-package.sh && ./scripts/cleanup-ghcr-package.sh || true'
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     post {
