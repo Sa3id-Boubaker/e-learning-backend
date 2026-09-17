@@ -12,6 +12,8 @@ pipeline {
         CLOUDINARY_API_KEY = credentials('cloudinary-api-key')
         CLOUDINARY_API_SECRET = credentials('cloudinary-api-secret')
         DOCKER_BUILDKIT = '1'
+        REGISTRY = 'ghcr.io'
+        REGISTRY_NAMESPACE = 'sa3id-boubaker'
     }
 
     stages {
@@ -81,11 +83,32 @@ pipeline {
                 sh "docker images --filter=reference='omarise-*'"
             }
         }
+
+        stage('Docker Login') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'omarise-docker-registry', usernameVariable: 'REGISTRY_USER', passwordVariable: 'REGISTRY_TOKEN')]) {
+                    sh 'echo "$REGISTRY_TOKEN" | docker login "$REGISTRY" -u "$REGISTRY_USER" --password-stdin'
+                }
+            }
+        }
+
+        stage('Docker Push') {
+            steps {
+                script {
+                    env.SERVICES.split(' ').each { svc ->
+                        sh "docker tag omarise-${svc}:${env.BUILD_NUMBER} ${env.REGISTRY}/${env.REGISTRY_NAMESPACE}/omarise-${svc}:${env.BUILD_NUMBER}"
+                        sh "docker push ${env.REGISTRY}/${env.REGISTRY_NAMESPACE}/omarise-${svc}:${env.BUILD_NUMBER}"
+                    }
+                }
+                sh "docker images --filter=reference='${env.REGISTRY}/${env.REGISTRY_NAMESPACE}/omarise-*'"
+            }
+        }
     }
 
     post {
         always {
             junit testResults: '**/target/surefire-reports/*.xml', allowEmptyResults: true
+            sh 'docker logout "$REGISTRY" || true'
         }
     }
 }
