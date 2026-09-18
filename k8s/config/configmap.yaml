@@ -1,0 +1,31 @@
+# Non-secret configuration shared across OMARISE services.
+# Only variables actually read by the applications (verified against each
+# service's application.yml) are listed here — nothing speculative.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: omarise-config
+  namespace: omarise
+data:
+  # Consumed by: api-gateway, user-service, course-service, training-service,
+  # forum-service, notification-service (via ${EUREKA_URI:...} in application.yml).
+  # eureka-server itself does not consume this — it IS the registry.
+  EUREKA_URI: "http://eureka-server:8761/eureka/"
+
+  # Consumed by: course-service, training-service, forum-service, notification-service
+  # (via spring.rabbitmq.host/port in application.yml). user-service and api-gateway
+  # do not use RabbitMQ.
+  RABBITMQ_HOST: "rabbitmq"
+  RABBITMQ_PORT: "5672"
+
+  # Consumed by: user-service only (spring.mail.host/port). Both already default to
+  # these exact values in application.yml when unset — listed explicitly here so the
+  # Deployment is self-documenting.
+  MAIL_HOST: "smtp.gmail.com"
+  MAIL_PORT: "587"
+
+  # Consumed by: user-service only (google.oauth.client-id). This is a public OAuth
+  # client ID, not a secret (it is already embedded as-is in the Angular frontend's
+  # environment.ts/environment.prod.ts and in user-service's own default value) —
+  # reproduced here verbatim from the existing code, not invented.
+  GOOGLE_OAUTH_CLIENT_ID: "508532760559-kfd67q4chditaf0qp21uipo8va9fp8q8.apps.googleusercontent.com"

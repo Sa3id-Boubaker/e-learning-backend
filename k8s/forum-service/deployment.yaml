@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forum-service
+  namespace: omarise
+  labels:
+    app: forum-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: forum-service
+  template:
+    metadata:
+      labels:
+        app: forum-service
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      containers:
+        - name: forum-service
+          image: ghcr.io/sa3id-boubaker/omarise-forum-service:33
+          ports:
+            - containerPort: 8085
+          env:
+            - name: EUREKA_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: omarise-config
+                  key: EUREKA_URI
+            - name: RABBITMQ_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: omarise-config
+                  key: RABBITMQ_HOST
+            - name: RABBITMQ_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: omarise-config
+                  key: RABBITMQ_PORT
+            - name: MONGO_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: omarise-mongo
+                  key: MONGO_DB_USER
+            - name: MONGO_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: omarise-mongo
+                  key: MONGO_DB_PASSWORD
+            - name: RABBITMQ_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: omarise-rabbitmq
+                  key: RABBITMQ_USERNAME
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: omarise-rabbitmq
+                  key: RABBITMQ_PASSWORD
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: omarise-jwt
+                  key: JWT_SECRET
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8085
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8085
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 250m
+              memory: 384Mi
+            limits:
+              cpu: 500m
+              memory: 768Mi

@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: omarise
+  labels:
+    app: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      containers:
+        - name: frontend
+          image: ghcr.io/sa3id-boubaker/omarise-frontend:35
+          ports:
+            - containerPort: 80
+          # No env vars: nginx.conf is baked into the image at build time and already
+          # hardcodes proxy_pass to http://api-gateway:8080 — which matches this
+          # namespace's api-gateway Service name exactly, so nothing to override here.
+          # Not modified, per this phase's rules.
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 6
+          # Starting values for Minikube only — nginx serving a static Angular bundle
+          # is lightweight, adjust after observing real usage.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi

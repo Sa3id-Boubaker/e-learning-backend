@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq
+  namespace: omarise
+  labels:
+    app: rabbitmq
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      # Public Docker Hub image (same one used in docker-compose.yml) — not one of the
+      # 8 GHCR images, so no imagePullSecrets needed here.
+      containers:
+        - name: rabbitmq
+          image: rabbitmq:3-management
+          ports:
+            - name: amqp
+              containerPort: 5672
+            - name: management
+              containerPort: 15672
+          env:
+            # Official rabbitmq image bootstrap variables — set from the same Secret
+            # used by the client services (RABBITMQ_USERNAME/PASSWORD below), so the
+            # broker's real account matches what the services authenticate with.
+            - name: RABBITMQ_DEFAULT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: omarise-rabbitmq
+                  key: RABBITMQ_USERNAME
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: omarise-rabbitmq
+                  key: RABBITMQ_PASSWORD
+          # Using a TCP check on the AMQP port (5672) rather than an exec
+          # "rabbitmq-diagnostics ping" probe: on a resource-constrained Minikube
+          # node, the exec probe (which forks a new process inside the container
+          # on every check) was timing out under CPU contention even while
+          # RabbitMQ itself was healthy, causing false-positive restarts.
+          readinessProbe:
+            tcpSocket:
+              port: 5672
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            tcpSocket:
+              port: 5672
+            initialDelaySeconds: 60
+            timeoutSeconds: 5
+            periodSeconds: 15
+            failureThreshold: 6
+          # Starting values for Minikube only — RabbitMQ's Erlang VM has some fixed
+          # overhead beyond this, tune after observing real usage.
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          # No volumeMounts / PVC on purpose: the current docker-compose.yml already
+          # runs RabbitMQ without persistent storage, so this first Minikube iteration
+          # matches that (queues/messages do not survive a pod restart).

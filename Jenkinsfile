@@ -14,6 +14,8 @@ pipeline {
         DOCKER_BUILDKIT = '1'
         REGISTRY = 'ghcr.io'
         REGISTRY_NAMESPACE = 'sa3id-boubaker'
+        KUBE_NAMESPACE = 'omarise'
+        DEPLOY_ORDER = 'eureka-server user-service course-service training-service forum-service notification-service api-gateway'
     }
 
     stages {
@@ -111,6 +113,49 @@ pipeline {
                         env.SERVICES.split(' ').each { svc ->
                             withEnv(["PACKAGE_NAME=omarise-${svc}"]) {
                                 sh 'chmod +x scripts/cleanup-ghcr-package.sh && ./scripts/cleanup-ghcr-package.sh || true'
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Kubernetes Deploy') {
+            steps {
+                withCredentials([file(credentialsId: 'kubeconfig-minikube', variable: 'KUBECONFIG')]) {
+                    sh 'kubectl version --client'
+                    sh "kubectl get namespace ${env.KUBE_NAMESPACE}"
+                    sh "kubectl get secret ghcr-pull-secret -n ${env.KUBE_NAMESPACE}"
+                    script {
+                        env.DEPLOY_ORDER.split(' ').each { svc ->
+                            sh "kubectl set image deployment/${svc} ${svc}=${env.REGISTRY}/${env.REGISTRY_NAMESPACE}/omarise-${svc}:${env.BUILD_NUMBER} -n ${env.KUBE_NAMESPACE}"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Kubernetes Rollout Verification') {
+            steps {
+                withCredentials([file(credentialsId: 'kubeconfig-minikube', variable: 'KUBECONFIG')]) {
+                    script {
+                        env.DEPLOY_ORDER.split(' ').each { svc ->
+                            try {
+                                sh "kubectl rollout status deployment/${svc} -n ${env.KUBE_NAMESPACE} --timeout=180s"
+                            } catch (err) {
+                                echo "Rollout failed for ${svc} — collecting diagnostics for this component only."
+                                sh """
+                                    set +e
+                                    echo '--- kubectl get pods -n ${env.KUBE_NAMESPACE} ---'
+                                    kubectl get pods -n ${env.KUBE_NAMESPACE}
+                                    echo '--- kubectl describe deployment/${svc} -n ${env.KUBE_NAMESPACE} ---'
+                                    kubectl describe deployment/${svc} -n ${env.KUBE_NAMESPACE}
+                                    echo '--- kubectl describe pods -l app=${svc} -n ${env.KUBE_NAMESPACE} ---'
+                                    kubectl describe pods -l app=${svc} -n ${env.KUBE_NAMESPACE}
+                                    echo '--- kubectl logs deployment/${svc} -n ${env.KUBE_NAMESPACE} --tail=100 ---'
+                                    kubectl logs deployment/${svc} -n ${env.KUBE_NAMESPACE} --tail=100
+                                """
+                                error("Kubernetes rollout failed for ${svc}")
                             }
                         }
                     }
