@@ -127,19 +127,16 @@ pipeline {
                     sh "kubectl get namespace ${env.KUBE_NAMESPACE}"
                     sh "kubectl get secret ghcr-pull-secret -n ${env.KUBE_NAMESPACE}"
                     script {
+                        // Deploy ONE service at a time and wait for its rollout before moving
+                        // to the next. Updating all 7 Deployments at once was tried first and
+                        // caused every new pod to crash-restart under liveness-probe timeouts —
+                        // 7 simultaneous rolling updates (each briefly running old+new pod side
+                        // by side) overloaded this single-node Minikube VM, the same class of
+                        // CPU-contention issue seen earlier with RabbitMQ during manual Kubernetes
+                        // setup. Going one service at a time keeps only one extra pod starting up
+                        // at any given moment.
                         env.DEPLOY_ORDER.split(' ').each { svc ->
                             sh "kubectl set image deployment/${svc} ${svc}=${env.REGISTRY}/${env.REGISTRY_NAMESPACE}/omarise-${svc}:${env.BUILD_NUMBER} -n ${env.KUBE_NAMESPACE}"
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Kubernetes Rollout Verification') {
-            steps {
-                withCredentials([file(credentialsId: 'kubeconfig-minikube', variable: 'KUBECONFIG')]) {
-                    script {
-                        env.DEPLOY_ORDER.split(' ').each { svc ->
                             try {
                                 sh "kubectl rollout status deployment/${svc} -n ${env.KUBE_NAMESPACE} --timeout=180s"
                             } catch (err) {
@@ -156,6 +153,27 @@ pipeline {
                                     kubectl logs deployment/${svc} -n ${env.KUBE_NAMESPACE} --tail=100
                                 """
                                 error("Kubernetes rollout failed for ${svc}")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Kubernetes Rollout Verification') {
+            steps {
+                withCredentials([file(credentialsId: 'kubeconfig-minikube', variable: 'KUBECONFIG')]) {
+                    sh "kubectl get deployments -n ${env.KUBE_NAMESPACE}"
+                    sh "kubectl get pods -n ${env.KUBE_NAMESPACE}"
+                    script {
+                        // Final cross-check: every Deployment this build touched must still show
+                        // its Deployment-wide desired replica count as ready, confirming nothing
+                        // regressed after the sequential deploy above.
+                        env.DEPLOY_ORDER.split(' ').each { svc ->
+                            def ready = sh(script: "kubectl get deployment/${svc} -n ${env.KUBE_NAMESPACE} -o jsonpath='{.status.readyReplicas}'", returnStdout: true).trim()
+                            def desired = sh(script: "kubectl get deployment/${svc} -n ${env.KUBE_NAMESPACE} -o jsonpath='{.spec.replicas}'", returnStdout: true).trim()
+                            if (ready == '' || ready != desired) {
+                                error("Deployment ${svc} is not fully ready (ready=${ready}, desired=${desired})")
                             }
                         }
                     }
