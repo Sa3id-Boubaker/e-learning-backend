@@ -139,6 +139,11 @@ pipeline {
                             sh "kubectl set image deployment/${svc} ${svc}=${env.REGISTRY}/${env.REGISTRY_NAMESPACE}/omarise-${svc}:${env.BUILD_NUMBER} -n ${env.KUBE_NAMESPACE}"
                             try {
                                 sh "kubectl rollout status deployment/${svc} -n ${env.KUBE_NAMESPACE} --timeout=180s"
+                                // Keep the k8s/ manifest in sync with what's actually running, so a
+                                // future bootstrap of a fresh cluster (kubectl apply -f k8s/) never
+                                // points at a tag that Cleanup Old GHCR Versions has since deleted
+                                // (only the last KEEP_VERSIONS=3 tagged images are kept per service).
+                                sh "sed -i \"s#image: ${env.REGISTRY}/${env.REGISTRY_NAMESPACE}/omarise-${svc}:.*#image: ${env.REGISTRY}/${env.REGISTRY_NAMESPACE}/omarise-${svc}:${env.BUILD_NUMBER}#\" k8s/${svc}/deployment.yaml"
                             } catch (err) {
                                 echo "Rollout failed for ${svc} — collecting diagnostics for this component only."
                                 sh """
@@ -177,6 +182,26 @@ pipeline {
                             }
                         }
                     }
+                }
+            }
+        }
+
+        stage('Sync k8s Manifests to Git') {
+            steps {
+                withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-omarise-backend', keyFileVariable: 'SSH_KEY')]) {
+                    sh '''
+                        set -e
+                        export GIT_SSH_COMMAND="ssh -i $SSH_KEY -o StrictHostKeyChecking=accept-new"
+                        git config user.email "jenkins-ci@omarise.local"
+                        git config user.name "Jenkins CI"
+                        if git diff --quiet -- k8s/; then
+                            echo "k8s/ deja a jour, rien a committer."
+                        else
+                            git add k8s/
+                            git commit -m "chore(k8s): sync image tags to build ${BUILD_NUMBER}"
+                            git push origin HEAD:dev
+                        fi
+                    '''
                 }
             }
         }
