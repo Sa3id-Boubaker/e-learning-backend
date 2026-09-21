@@ -25,6 +25,13 @@ spec:
           # eureka-server has no externalized configuration: register-with-eureka
           # and fetch-registry are hardcoded to false in application.yml (it IS the
           # registry), so no env vars are required here.
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8761
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 30
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness

@@ -5,6 +5,10 @@ metadata:
   namespace: omarise
   labels:
     app: notification-service
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/actuator/prometheus"
+    prometheus.io/port: "8083"
 spec:
   type: ClusterIP
   selector:

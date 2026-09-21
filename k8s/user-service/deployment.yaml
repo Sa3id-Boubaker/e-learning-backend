@@ -83,6 +83,13 @@ spec:
                 secretKeyRef:
                   name: omarise-cloudinary
                   key: CLOUDINARY_API_SECRET
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8081
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 30
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness

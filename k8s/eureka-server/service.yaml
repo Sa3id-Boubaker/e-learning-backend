@@ -5,6 +5,10 @@ metadata:
   namespace: omarise
   labels:
     app: eureka-server
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/actuator/prometheus"
+    prometheus.io/port: "8761"
 spec:
   type: ClusterIP
   selector:

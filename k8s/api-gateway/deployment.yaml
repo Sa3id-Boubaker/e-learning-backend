@@ -30,6 +30,13 @@ spec:
                 configMapKeyRef:
                   name: omarise-config
                   key: EUREKA_URI
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 30
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness

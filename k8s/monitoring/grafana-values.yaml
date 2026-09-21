@@ -1,0 +1,68 @@
+# OMARISE — Phase 7.3: minimal Grafana install for the Minikube cluster,
+# connected to the existing Prometheus release (Phase 7.2).
+#
+# Chart: grafana/grafana (official Grafana Helm chart, from
+# https://grafana.github.io/helm-charts).
+#
+# Prometheus service discovered during the Phase 7.3 audit:
+#   Service:   prometheus-server
+#   Namespace: monitoring
+#   Port:      80/TCP (ClusterIP)
+# -> internal DNS name used below: prometheus-server.monitoring.svc.cluster.local:80
+#
+# Everything not listed below is left at the chart's default.
+
+replicas: 1
+
+# Ephemeral storage — same choice as the Prometheus release in this cluster
+# (k8s/monitoring/prometheus-values.yaml): Minikube dev cluster, no PVC needed.
+# Dashboards are provisioned from this values file (see below) and from the
+# ConfigMap-based dashboard sidecar, so nothing important lives only in the
+# Grafana pod's local disk.
+persistence:
+  enabled: false
+
+# Modest, explicit requests/limits (the chart sets none by default).
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 300m
+    memory: 256Mi
+
+# ClusterIP only — no NodePort/LoadBalancer. Local access is via
+# `kubectl port-forward`, never a public exposure.
+service:
+  type: ClusterIP
+
+ingress:
+  enabled: false
+
+# No adminUser/adminPassword set here on purpose: the chart auto-generates a
+# random admin password and stores it in the "grafana" Secret
+# (keys: admin-user, admin-password) in this namespace. Nothing credential-like
+# is committed to Git.
+
+# Auto-provision Prometheus as the default data source, pointing at the
+# existing Prometheus Service's internal cluster DNS name (not localhost/
+# host.docker.internal — Grafana runs inside the cluster).
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus-server.monitoring.svc.cluster.local:80
+        isDefault: true
+        editable: true
+
+# Dashboard provisioning: load any dashboard JSON placed in a ConfigMap
+# labeled grafana_dashboard=1 in this namespace (populated in a later step
+# once the OMARISE dashboard JSON exists).
+sidecar:
+  dashboards:
+    enabled: true
+    label: grafana_dashboard
+    labelValue: "1"

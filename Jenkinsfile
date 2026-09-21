@@ -16,6 +16,13 @@ pipeline {
         REGISTRY_NAMESPACE = 'sa3id-boubaker'
         KUBE_NAMESPACE = 'omarise'
         DEPLOY_ORDER = 'eureka-server user-service course-service training-service forum-service notification-service api-gateway'
+        // Phase 8 — monitoring verification. Names confirmed during the Phase 7.2/7.3
+        // audit (k8s/monitoring/grafana-values.yaml header) — not assumed.
+        MONITORING_NAMESPACE = 'monitoring'
+        PROMETHEUS_SVC = 'prometheus-server'
+        PROMETHEUS_SVC_PORT = '80'
+        GRAFANA_SVC = 'grafana'
+        DASHBOARD_CONFIGMAP = 'omarise-dashboard'
     }
 
     stages {
@@ -181,6 +188,196 @@ pipeline {
                                 error("Deployment ${svc} is not fully ready (ready=${ready}, desired=${desired})")
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        stage('Monitoring Verification') {
+            steps {
+                withCredentials([file(credentialsId: 'kubeconfig-minikube', variable: 'KUBECONFIG')]) {
+                    timeout(time: 3, unit: 'MINUTES') {
+                        sh '''
+                            set -u
+                            echo "Monitoring Verification"
+                            echo "-----------------------"
+
+                            FAIL=0
+
+                            # 1. Kubernetes cluster access (same kubeconfig already used above).
+                            if ! kubectl get namespace "$MONITORING_NAMESPACE" >/dev/null 2>&1; then
+                                echo "Kubernetes cluster access: FAILED (namespace $MONITORING_NAMESPACE unreachable)"
+                                exit 1
+                            fi
+
+                            # 2. Prometheus Service exists (name/namespace/port confirmed during the
+                            # Phase 7.2/7.3 audit, see k8s/monitoring/grafana-values.yaml header).
+                            if ! kubectl get svc "$PROMETHEUS_SVC" -n "$MONITORING_NAMESPACE" >/dev/null 2>&1; then
+                                echo "Prometheus service '$PROMETHEUS_SVC' not found in namespace '$MONITORING_NAMESPACE'"
+                                exit 1
+                            fi
+
+                            # Helper: is a Deployment's ready replica count equal to its desired count?
+                            # Same pattern already used above in Kubernetes Rollout Verification.
+                            deployment_ready() {
+                                d_ready=$(kubectl get deployment "$1" -n "$2" -o jsonpath='{.status.readyReplicas}' 2>/dev/null)
+                                d_desired=$(kubectl get deployment "$1" -n "$2" -o jsonpath='{.spec.replicas}' 2>/dev/null)
+                                [ -n "$d_ready" ] && [ "$d_ready" = "$d_desired" ]
+                            }
+
+                            # 3. Prometheus Deployment Ready, short retry window for a transient
+                            # scheduling delay right after this build's own deploy.
+                            PROM_READY="false"
+                            i=1
+                            while [ "$i" -le 3 ]; do
+                                if deployment_ready "$PROMETHEUS_SVC" "$MONITORING_NAMESPACE"; then
+                                    PROM_READY="true"
+                                    break
+                                fi
+                                echo "Prometheus deployment not ready yet (attempt $i/3), retrying in 10s..."
+                                i=$((i+1))
+                                sleep 10
+                            done
+                            if [ "$PROM_READY" = "true" ]; then
+                                echo "Prometheus: READY"
+                            else
+                                echo "Prometheus: NOT READY"
+                                FAIL=1
+                            fi
+
+                            # 4/5. Prometheus reachable + the 7 expected OMARISE targets UP.
+                            # Queried through the Kubernetes API server's Service proxy subresource
+                            # (kubectl get --raw .../proxy/...) rather than a direct HTTP call, so
+                            # this only needs the same API-server access every other kubectl command
+                            # in this pipeline already uses — no direct network route from the
+                            # Jenkins agent into the cluster pod network is required.
+                            #
+                            # Target label names (job=kubernetes-service-endpoints, app=<service>,
+                            # namespace=omarise) were inspected directly in Prometheus/Grafana
+                            # Explore during Phase 7.2/7.3 — not assumed here.
+                            UP_COUNT=0
+                            UP_LIST=""
+                            MISSING_LIST=""
+                            ATTEMPTS=6
+                            SLEEP_SECONDS=15
+                            attempt=1
+                            while [ "$attempt" -le "$ATTEMPTS" ]; do
+                                RAW=$(kubectl get --raw "/api/v1/namespaces/$MONITORING_NAMESPACE/services/$PROMETHEUS_SVC:$PROMETHEUS_SVC_PORT/proxy/api/v1/targets?state=active" 2>/dev/null || true)
+
+                                UP_COUNT=0
+                                UP_LIST=""
+                                MISSING_LIST=""
+                                if [ -n "$RAW" ]; then
+                                    # Dependency-free split: strip quotes, then one target object per
+                                    # line. Prometheus only emits a "},{ " sequence at activeTargets
+                                    # array boundaries in this response shape — nested objects like
+                                    # "labels":{...} are always followed by ,"<nextkey>", never by
+                                    # another top-level target object, so this split is safe here.
+                                    FLAT=$(printf '%s' "$RAW" | tr -d '"' | sed 's/},{/}\\n{/g')
+                                    for svc in $SERVICES; do
+                                        LINE=$(printf '%s\\n' "$FLAT" | grep -E "app:$svc[,}]" | grep -E "namespace:$KUBE_NAMESPACE[,}]" || true)
+                                        if [ -n "$LINE" ] && printf '%s' "$LINE" | grep -q "health:up"; then
+                                            UP_COUNT=$((UP_COUNT+1))
+                                            UP_LIST="$UP_LIST $svc"
+                                        else
+                                            MISSING_LIST="$MISSING_LIST $svc"
+                                        fi
+                                    done
+                                fi
+
+                                if [ "$UP_COUNT" -eq 7 ]; then
+                                    break
+                                fi
+                                echo "OMARISE targets: $UP_COUNT/7 UP (attempt $attempt/$ATTEMPTS) - retrying in ${SLEEP_SECONDS}s..."
+                                attempt=$((attempt+1))
+                                sleep "$SLEEP_SECONDS"
+                            done
+
+                            echo "OMARISE targets: $UP_COUNT/7 UP"
+                            if [ "$UP_COUNT" -ne 7 ]; then
+                                echo "Missing/DOWN OMARISE targets:$MISSING_LIST"
+                                FAIL=1
+                            fi
+
+                            # 6. Grafana Deployment Ready, same short retry window.
+                            GRAF_READY="false"
+                            i=1
+                            while [ "$i" -le 3 ]; do
+                                if deployment_ready "$GRAFANA_SVC" "$MONITORING_NAMESPACE"; then
+                                    GRAF_READY="true"
+                                    break
+                                fi
+                                echo "Grafana deployment not ready yet (attempt $i/3), retrying in 10s..."
+                                i=$((i+1))
+                                sleep 10
+                            done
+                            if [ "$GRAF_READY" = "true" ]; then
+                                echo "Grafana: READY"
+                            else
+                                echo "Grafana: NOT READY"
+                                FAIL=1
+                            fi
+
+                            # 7. Grafana Service exists.
+                            if ! kubectl get svc "$GRAFANA_SVC" -n "$MONITORING_NAMESPACE" >/dev/null 2>&1; then
+                                echo "Grafana service missing"
+                                FAIL=1
+                            fi
+
+                            # 7 (cont). Datasource provisioning file still mounted in the running
+                            # Grafana container (provisioned from k8s/monitoring/grafana-values.yaml's
+                            # "datasources:" block via the chart's default provisioning mechanism).
+                            # This only checks the file is PRESENT - it never reads/prints its
+                            # contents, so no datasource URL or credential is ever logged.
+                            if kubectl exec -n "$MONITORING_NAMESPACE" "deploy/$GRAFANA_SVC" -c grafana -- test -f /etc/grafana/provisioning/datasources/datasources.yaml >/dev/null 2>&1; then
+                                echo "Grafana datasource provisioning: PRESENT"
+                            else
+                                echo "Grafana datasource provisioning: MISSING"
+                                FAIL=1
+                            fi
+
+                            # 8. Existing dashboard provisioning ConfigMap (sidecar mechanism from
+                            # Phase 7.3) still present with its expected label. Does not create or
+                            # modify any dashboard.
+                            if kubectl get configmap "$DASHBOARD_CONFIGMAP" -n "$MONITORING_NAMESPACE" -l grafana_dashboard=1 >/dev/null 2>&1; then
+                                echo "Dashboard provisioning ConfigMap ($DASHBOARD_CONFIGMAP): PRESENT"
+                            else
+                                echo "Dashboard provisioning ConfigMap ($DASHBOARD_CONFIGMAP): MISSING"
+                                FAIL=1
+                            fi
+
+                            # 8 (cont). The dashboard JSON file in this repo still exists and is
+                            # valid JSON. Repo-content check only - does not touch Grafana itself.
+                            DASHBOARD_FILE="k8s/monitoring/omarise-dashboard.json"
+                            if [ ! -f "$DASHBOARD_FILE" ]; then
+                                echo "Dashboard file ($DASHBOARD_FILE): MISSING"
+                                FAIL=1
+                            elif command -v jq >/dev/null 2>&1; then
+                                if jq empty "$DASHBOARD_FILE" >/dev/null 2>&1; then
+                                    echo "Dashboard file ($DASHBOARD_FILE): VALID JSON"
+                                else
+                                    echo "Dashboard file ($DASHBOARD_FILE): INVALID JSON"
+                                    FAIL=1
+                                fi
+                            elif command -v python3 >/dev/null 2>&1; then
+                                if python3 -c "import json;json.load(open('$DASHBOARD_FILE'))" >/dev/null 2>&1; then
+                                    echo "Dashboard file ($DASHBOARD_FILE): VALID JSON"
+                                else
+                                    echo "Dashboard file ($DASHBOARD_FILE): INVALID JSON"
+                                    FAIL=1
+                                fi
+                            else
+                                echo "Dashboard file ($DASHBOARD_FILE): present, JSON validity not verified (no jq/python3 on this agent)"
+                            fi
+
+                            echo "-----------------------"
+                            if [ "$FAIL" -eq 0 ]; then
+                                echo "Monitoring verification: SUCCESS"
+                            else
+                                echo "Monitoring verification: FAILED"
+                                exit 1
+                            fi
+                        '''
                     }
                 }
             }

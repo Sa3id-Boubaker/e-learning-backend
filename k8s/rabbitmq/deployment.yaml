@@ -44,6 +44,12 @@ spec:
           # node, the exec probe (which forks a new process inside the container
           # on every check) was timing out under CPU contention even while
           # RabbitMQ itself was healthy, causing false-positive restarts.
+          startupProbe:
+            tcpSocket:
+              port: 5672
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 20
           readinessProbe:
             tcpSocket:
               port: 5672

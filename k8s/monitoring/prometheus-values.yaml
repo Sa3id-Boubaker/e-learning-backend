@@ -1,0 +1,44 @@
+# OMARISE — Phase 7.2: minimal Prometheus install for the Minikube cluster
+#
+# Chart: prometheus-community/prometheus (verified chart version 29.31.1 on this
+# machine via `helm search repo prometheus-community/prometheus`).
+#
+# Scraping strategy: relies entirely on this chart's built-in `kubernetes-service-endpoints`
+# scrape job (kubernetes_sd_configs role: endpointslice), which discovers targets via the
+# prometheus.io/scrape, prometheus.io/path and prometheus.io/port annotations already added
+# to the 7 OMARISE Service manifests (k8s/<service>/service.yaml). No custom scrapeConfigs
+# needed here — confirmed by reading the chart's default values.yaml before writing this file.
+#
+# Everything not listed below is left at the chart's default.
+
+# No Grafana in this chart by default — nothing to disable for that.
+
+alertmanager:
+  enabled: false
+
+kube-state-metrics:
+  enabled: false
+
+prometheus-node-exporter:
+  enabled: false
+
+prometheus-pushgateway:
+  enabled: false
+
+server:
+  # Ephemeral storage (emptyDir) — this is a Minikube dev cluster; Prometheus data is
+  # intentionally NOT persisted and is lost on pod restart. No PVC created.
+  persistentVolume:
+    enabled: false
+
+  # Short retention since there is no persistent storage behind it anyway.
+  retention: "6h"
+
+  # Modest, explicit requests/limits (the chart sets none by default).
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
