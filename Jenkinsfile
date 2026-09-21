@@ -339,8 +339,19 @@ pipeline {
                             # 8. Existing dashboard provisioning ConfigMap (sidecar mechanism from
                             # Phase 7.3) still present with its expected label. Does not create or
                             # modify any dashboard.
-                            if kubectl get configmap "$DASHBOARD_CONFIGMAP" -n "$MONITORING_NAMESPACE" -l grafana_dashboard=1 >/dev/null 2>&1; then
-                                echo "Dashboard provisioning ConfigMap ($DASHBOARD_CONFIGMAP): PRESENT"
+                            # NOTE: "kubectl get <type> <name> -l <selector>" is rejected by
+                            # kubectl ("name cannot be provided when a selector is specified") -
+                            # confirmed empirically against the real cluster in build #42.
+                            # Existence-by-name and the label value are therefore checked as two
+                            # separate, independent kubectl calls.
+                            if kubectl get configmap "$DASHBOARD_CONFIGMAP" -n "$MONITORING_NAMESPACE" >/dev/null 2>&1; then
+                                DASHBOARD_LABEL=$(kubectl get configmap "$DASHBOARD_CONFIGMAP" -n "$MONITORING_NAMESPACE" -o jsonpath='{.metadata.labels.grafana_dashboard}' 2>/dev/null)
+                                if [ "$DASHBOARD_LABEL" = "1" ]; then
+                                    echo "Dashboard provisioning ConfigMap ($DASHBOARD_CONFIGMAP): PRESENT"
+                                else
+                                    echo "Dashboard provisioning ConfigMap ($DASHBOARD_CONFIGMAP): PRESENT but missing/wrong grafana_dashboard label (found: '$DASHBOARD_LABEL')"
+                                    FAIL=1
+                                fi
                             else
                                 echo "Dashboard provisioning ConfigMap ($DASHBOARD_CONFIGMAP): MISSING"
                                 FAIL=1
