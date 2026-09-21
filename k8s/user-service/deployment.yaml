@@ -19,7 +19,7 @@ spec:
         - name: ghcr-pull-secret
       containers:
         - name: user-service
-          image: ghcr.io/sa3id-boubaker/omarise-user-service:39
+          image: ghcr.io/sa3id-boubaker/omarise-user-service:43
           ports:
             - containerPort: 8081
           env:

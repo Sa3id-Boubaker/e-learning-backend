@@ -19,7 +19,7 @@ spec:
         - name: ghcr-pull-secret
       containers:
         - name: api-gateway
-          image: ghcr.io/sa3id-boubaker/omarise-api-gateway:39
+          image: ghcr.io/sa3id-boubaker/omarise-api-gateway:43
           ports:
             - containerPort: 8080
           env:
