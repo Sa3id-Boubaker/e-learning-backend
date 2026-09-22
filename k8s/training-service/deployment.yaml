@@ -19,7 +19,7 @@ spec:
         - name: ghcr-pull-secret
       containers:
         - name: training-service
-          image: ghcr.io/sa3id-boubaker/omarise-training-service:43
+          image: ghcr.io/sa3id-boubaker/omarise-training-service:44
           ports:
             - containerPort: 8084
           env:
