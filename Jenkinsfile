@@ -455,6 +455,13 @@ pipeline {
                                     fi
                                     echo "Push rejected (dev moved), rebasing and retrying (attempt $ATTEMPT/$MAX_ATTEMPTS)..."
                                     git fetch origin dev
+                                    # Discard any incidental working-tree noise left over from
+                                    # earlier stages (e.g. 'chmod +x mvnw' in Build changes mvnw's
+                                    # file mode without touching k8s/) - git rebase refuses to run
+                                    # at all while ANY file in the tree is unstaged/modified, even
+                                    # ones unrelated to k8s/. The real payload is already committed
+                                    # above, so this is safe to discard.
+                                    git checkout -- .
                                     if ! git rebase origin/dev; then
                                         git rebase --abort
                                         echo "Rebase conflict while syncing k8s/ onto dev - manual resolution needed."
