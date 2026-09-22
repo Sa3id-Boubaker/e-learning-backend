@@ -434,7 +434,29 @@ pipeline {
                             else
                                 git add k8s/
                                 git commit -m "chore(k8s): sync image tags to build ${BUILD_NUMBER} [skip ci]"
-                                git push origin HEAD:dev
+
+                                # dev can move while Kubernetes Deploy above was running (several
+                                # minutes, sequential rollouts) - e.g. another build's own sync
+                                # commit landing first. Retry the push a few times, rebasing this
+                                # one sync commit onto the latest dev each time, instead of failing
+                                # an otherwise-successful deployment over a losing race.
+                                ATTEMPT=1
+                                MAX_ATTEMPTS=5
+                                until git push origin HEAD:dev; do
+                                    if [ "$ATTEMPT" -ge "$MAX_ATTEMPTS" ]; then
+                                        echo "git push failed after $MAX_ATTEMPTS attempts - giving up."
+                                        exit 1
+                                    fi
+                                    echo "Push rejected (dev moved), rebasing and retrying (attempt $ATTEMPT/$MAX_ATTEMPTS)..."
+                                    git fetch origin dev
+                                    if ! git rebase origin/dev; then
+                                        git rebase --abort
+                                        echo "Rebase conflict while syncing k8s/ onto dev - manual resolution needed."
+                                        exit 1
+                                    fi
+                                    ATTEMPT=$((ATTEMPT+1))
+                                    sleep 3
+                                done
                             fi
                         '''
                     }
