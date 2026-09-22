@@ -35,7 +35,7 @@ pipeline {
     }
 
     stages {
-        stage('CI') {
+        stage('Pipeline') {
             when {
                 // Skip entirely when the triggering commit is this pipeline's
                 // own automated k8s-manifest-sync push (see 'Sync k8s Manifests
@@ -52,6 +52,8 @@ pipeline {
                     }
                 }
             }
+            stages {
+            stage('CI') {
             stages {
             stage('Verify Environment') {
                 steps {
@@ -119,7 +121,11 @@ pipeline {
                     sh "docker images --filter=reference='omarise-*'"
                 }
             }
+            }
+            }
 
+            stage('CD') {
+            stages {
             stage('Docker Login') {
                 steps {
                     withCredentials([usernamePassword(credentialsId: 'omarise-docker-registry', usernameVariable: 'REGISTRY_USER', passwordVariable: 'REGISTRY_TOKEN')]) {
@@ -461,6 +467,8 @@ pipeline {
                         '''
                     }
                 }
+            }
+            }
             }
             }
         }
