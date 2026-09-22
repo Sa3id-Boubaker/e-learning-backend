@@ -19,7 +19,7 @@ spec:
         - name: ghcr-pull-secret
       containers:
         - name: forum-service
-          image: ghcr.io/sa3id-boubaker/omarise-forum-service:59
+          image: ghcr.io/sa3id-boubaker/omarise-forum-service:61
           ports:
             - containerPort: 8085
           env:

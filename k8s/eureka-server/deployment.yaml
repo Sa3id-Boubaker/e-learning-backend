@@ -19,7 +19,7 @@ spec:
         - name: ghcr-pull-secret
       containers:
         - name: eureka-server
-          image: ghcr.io/sa3id-boubaker/omarise-eureka-server:59
+          image: ghcr.io/sa3id-boubaker/omarise-eureka-server:61
           ports:
             - containerPort: 8761
           # eureka-server has no externalized configuration: register-with-eureka
